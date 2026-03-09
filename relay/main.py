@@ -1,6 +1,7 @@
 from magnet.coil import ElectroMagnet as em
 from switch.close import close as c
 from switch.open  import open as o
+import argparse
 
 class RelayException(Exception):
 	# 0 if core is not connected with the armature
@@ -25,66 +26,83 @@ class Main():
 		self.v_value = v
 		self.r_value = r
 		self.magnetic = m
-		self.attach = 0
+		self.armature = 0
 		self.fc = fc_value
 
+	def attach(self):
+		return self.armature + 1 # 1 is attached to core
+	
+	def return_spring(self):
+		if self.armature == 1:
+			return False
+		elif self.armature == 0:
+			return True # if True then the spring returns the
+						# armature
+		
 	# Once there is a positive magnetic field
 	# the core of the coil must be attached
 	# with the armature along with the
 	# return spring
 	def connect_core(self):
+		s = self.return_spring()
 		if self.magnetic:
-			self.attach = 1
-		elif self.magnetic is False:
-			self.attach = 0
+			self.attach()
+		elif self.magnetic is False and s:
+			pass	
 	
 	# fc is for NC and NO return value
-	# com will depends either to
-	# both fixed contact
-	def com(self, fc):
-		fc = self.fc
+	# com will depends either to both
+	# of the fixed contacts
+	def com(self):
 		c = 0
-		if fc:
+		if self.fc:
 			return 1 # com connected to NC 
 		else:
 			return c # as 0 means com connected to NO
 	
-	def signal_output(com):
+	def signal_output(self, com):
 		if com == 1 and c is True:
 			val = f"com_value is {com}, NORMALLY CLOSED"
 			print(val)
 		elif com == 0 and o is False:
 			val = f"com_value is {com}, NORMALLY OPEN"
 
-	def light(contact_status):
+	def light(self, contact_status):
 		# Light can only be turned on if a NC is closed
 		# otherwise NO is triggered 
-		if contact_status is 1:
+		if contact_status == 1:
 			return True
-		elif contact_status is 0:
+		elif contact_status == 0:
 			return False 
 
 	def main(self):
-		try:
-			current = em(self.v_value, self.r_value).current_measurement()
-			magnetic_field_val = em.gen_magnetic(current)
-			if magnetic_field_val is False:
-				raise CurrentException()
-		except CurrentException as e:
-			pass
-
+		# Check if armature is connected to the core of the coil
 		cc = self.connect_core()
-		com_val = self.com(self.fc)
-		if cc:
-			if com_val is 1:
-				self.signal_output(com_val)
+		com_value = self.com()
+		if cc == 1:
+			if com_value == 1:
+				self.signal_output(com_value)
 		elif cc is False:
 			raise RelayException(self.attach)
 		
-		if self.light(cc) is 0:
-			print("no light")
-		else:
-			print("light on")
+		# Light Switch
+		return f"light status: {self.light(com_value)}"
 
-	if __name__ == "__main__":
-		main()
+if __name__ == "__main__":
+	parser = argparse.ArgumentParser()
+	# Ex. python relay(10, 3) // 10V and 3r
+	parser.add_argument("v", type=int, help='voltage')
+	parser.add_argument("r", type=int, help="resistance")
+	args = parser.parse_args()
+
+	magnet = em(args.v, args.r)
+	current = magnet.current_measurement(args.v, args.r)
+	magnetic_field_val = magnet.gen_magnetic(current)
+	try:
+		if magnetic_field_val is False:
+			raise CurrentException()
+	except CurrentException as e:
+		pass
+
+	relay = Main(em.gen_magnetic, args.v, args.r, True)
+	print(relay.main())
