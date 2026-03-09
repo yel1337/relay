@@ -2,6 +2,8 @@ from magnet.coil import ElectroMagnet as em
 from switch.close import close as c
 from switch.open  import open as o
 import argparse
+import logging
+import sys
 
 class RelayException(Exception):
 	# 0 if core is not connected with the armature
@@ -47,8 +49,9 @@ class Main():
 		s = self.return_spring()
 		if self.magnetic:
 			self.attach()
+			return True
 		elif self.magnetic is False and s:
-			pass	
+			raise RelayException(0)
 	
 	# fc is for NC and NO return value
 	# com will depends either to both
@@ -61,11 +64,10 @@ class Main():
 			return c # as 0 means com connected to NO
 	
 	def signal_output(self, com):
-		if com == 1 and c is True:
-			val = f"com_value is {com}, NORMALLY CLOSED"
-			print(val)
-		elif com == 0 and o is False:
-			val = f"com_value is {com}, NORMALLY OPEN"
+		if com == 1:
+			return f"com_value is {com}, NORMALLY CLOSED"
+		elif com == 0:
+			return f"com_value is {com}, NORMALLY OPEN"
 
 	def light(self, contact_status):
 		# Light can only be turned on if a NC is closed
@@ -79,12 +81,12 @@ class Main():
 		# Check if armature is connected to the core of the coil
 		cc = self.connect_core()
 		com_value = self.com()
-		if cc == 1:
+		if cc is True:
 			if com_value == 1:
-				self.signal_output(com_value)
+				pass
 		elif cc is False:
 			raise RelayException(self.attach)
-		
+
 		# Light Switch
 		return f"light status: {self.light(com_value)}"
 
@@ -93,6 +95,12 @@ if __name__ == "__main__":
 	# Ex. python relay(10, 3) // 10V and 3r
 	parser.add_argument("v", type=int, help='voltage')
 	parser.add_argument("r", type=int, help="resistance")
+	parser.add_argument(
+		'-d', '--debug',
+		action='store_true',
+		default=False,
+		help='Debug COM'
+	)
 	args = parser.parse_args()
 
 	magnet = em(args.v, args.r)
@@ -105,4 +113,11 @@ if __name__ == "__main__":
 		pass
 
 	relay = Main(em.gen_magnetic, args.v, args.r, True)
+
+	if args.debug:
+		print("Debug mode enabled. Printing debug info to stderr.", file=sys.stderr)
+		x = print(f"{relay.signal_output(relay.com())}")
+		logging.debug(f"{x}")
+		logging.basicConfig(level=logging.INFO)
+	
 	print(relay.main())
